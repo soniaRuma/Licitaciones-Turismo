@@ -1,0 +1,29 @@
+name: Actualización diaria de licitaciones de Turismo
+
+on:
+  schedule:
+    # Se ejecuta todos los días a las 06:00 hora española (04:00 UTC en horario de verano, 05:00 en invierno).
+    # GitHub Actions usa siempre UTC, por eso ponemos 05:00 UTC como término medio razonable.
+    - cron: "0 5 * * *"
+  workflow_dispatch: {}   # permite lanzarlo manualmente desde la pestaña "Actions" de GitHub
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código del repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar la ingesta de licitaciones
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/ingest_placsp.py
