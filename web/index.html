@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Licitaciones de Turismo — minube</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --card: #ffffff;
+    --text: #1f2320;
+    --muted: #6b7269;
+    --accent: #0f7a5c;
+    --accent-light: #e6f4ef;
+    --border: #e5e5e0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  header {
+    padding: 24px 20px 16px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  p.subtitle { color: var(--muted); margin: 0; font-size: 0.95rem; }
+
+  .filtros {
+    max-width: 1100px;
+    margin: 0 auto 20px;
+    padding: 0 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .filtros input, .filtros select {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: white;
+  }
+  .filtros input[type="text"] { flex: 1 1 260px; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 0 20px 60px; }
+
+  .resumen { color: var(--muted); font-size: 0.85rem; margin-bottom: 12px; }
+
+  .tarjeta {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+  .tarjeta .fila-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .organismo { font-weight: 600; font-size: 0.95rem; }
+  .capa-badge {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--accent-light);
+    color: var(--accent);
+    font-weight: 600;
+    white-space: nowrap;
+    height: fit-content;
+  }
+  .titulo { margin: 4px 0 8px; font-size: 1rem; line-height: 1.35; }
+  .meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.82rem; color: var(--muted); margin-bottom: 8px; }
+  .meta b { color: var(--text); }
+  .enlace a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .enlace a:hover { text-decoration: underline; }
+
+  .vacio, .cargando {
+    text-align: center;
+    color: var(--muted);
+    padding: 60px 20px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16181a;
+      --card: #1f2224;
+      --text: #f0f0ee;
+      --muted: #9aa19b;
+      --accent: #34c98f;
+      --accent-light: #14332a;
+      --border: #2c2f31;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16181a;
+    --card: #1f2224;
+    --text: #f0f0ee;
+    --muted: #9aa19b;
+    --accent: #34c98f;
+    --accent-light: #14332a;
+    --border: #2c2f31;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Licitaciones de Turismo</h1>
+  <p class="subtitle">Panel de consulta — datos actualizados diariamente desde PLACSP y plataformas autonómicas</p>
+</header>
+
+<div class="filtros">
+  <input type="text" id="busqueda" placeholder="Buscar por organismo o palabra clave..." />
+  <select id="filtroCapa">
+    <option value="">Todas las capas</option>
+    <option value="capa1">Capa 1 — PLACSP</option>
+    <option value="capa2">Capa 2 — Autonómicas</option>
+    <option value="capa3">Capa 3 — Webs propias</option>
+  </select>
+  <select id="filtroOrden">
+    <option value="fecha_publicacion.desc">Más recientes primero</option>
+    <option value="fecha_limite.asc">Plazo más próximo primero</option>
+    <option value="importe.desc">Mayor importe primero</option>
+  </select>
+</div>
+
+<main>
+  <div class="resumen" id="resumen">Cargando licitaciones...</div>
+  <div id="listado"></div>
+</main>
+
+<script>
+  // ------------------------------------------------------------------
+  // CONFIGURA AQUÍ TU PROYECTO DE SUPABASE (ver GUIA_INSTALACION.md)
+  // La "anon key" es pública y de solo lectura por diseño (Row Level
+  // Security en la tabla solo permite SELECT) — es seguro tenerla aquí.
+  // ------------------------------------------------------------------
+  const SUPABASE_URL = "PEGA_AQUI_TU_SUPABASE_URL";
+  const SUPABASE_ANON_KEY = "PEGA_AQUI_TU_SUPABASE_ANON_KEY";
+
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const elListado = document.getElementById("listado");
+  const elResumen = document.getElementById("resumen");
+  const elBusqueda = document.getElementById("busqueda");
+  const elCapa = document.getElementById("filtroCapa");
+  const elOrden = document.getElementById("filtroOrden");
+
+  function formatoFecha(f) {
+    if (!f) return "—";
+    const d = new Date(f);
+    return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+  }
+
+  function formatoImporte(n) {
+    if (n === null || n === undefined) return "—";
+    return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+  }
+
+  function nombreCapa(c) {
+    return { capa1: "PLACSP", capa2: "Autonómica", capa3: "Web propia" }[c] || c;
+  }
+
+  async function cargar() {
+    elResumen.textContent = "Cargando licitaciones...";
+    elListado.innerHTML = "";
+
+    const [ordenCampo, ordenDir] = elOrden.value.split(".");
+    let query = supabase
+      .from("licitaciones")
+      .select("*")
+      .order(ordenCampo, { ascending: ordenDir === "asc" })
+      .limit(200);
+
+    if (elCapa.value) {
+      query = query.eq("capa", elCapa.value);
+    }
+    const texto = elBusqueda.value.trim();
+    if (texto) {
+      query = query.or(`titulo.ilike.%${texto}%,organismo.ilike.%${texto}%`);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      elResumen.textContent = "Error cargando datos: " + error.message;
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      elResumen.textContent = "0 licitaciones encontradas.";
+      elListado.innerHTML = '<div class="vacio">No hay licitaciones que coincidan con este filtro.</div>';
+      return;
+    }
+
+    elResumen.textContent = `${data.length} licitaciones encontradas.`;
+    elListado.innerHTML = data.map(renderTarjeta).join("");
+  }
+
+  function renderTarjeta(l) {
+    return `
+      <div class="tarjeta">
+        <div class="fila-top">
+          <div class="organismo">${escapeHtml(l.organismo || "Organismo no especificado")}</div>
+          <div class="capa-badge">${nombreCapa(l.capa)}</div>
+        </div>
+        <div class="titulo">${escapeHtml(l.titulo || "(sin título)")}</div>
+        <div class="meta">
+          <span><b>Publicación:</b> ${formatoFecha(l.fecha_publicacion)}</span>
+          <span><b>Plazo límite:</b> ${formatoFecha(l.fecha_limite)}</span>
+          <span><b>Importe:</b> ${formatoImporte(l.importe)}</span>
+        </div>
+        ${l.resumen ? `<div class="meta">${escapeHtml(l.resumen)}</div>` : ""}
+        <div class="enlace">${l.enlace ? `<a href="${l.enlace}" target="_blank" rel="noopener">Ver licitación completa →</a>` : ""}</div>
+      </div>
+    `;
+  }
+
+  function escapeHtml(s) {
+    const div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  let temporizador;
+  elBusqueda.addEventListener("input", () => {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(cargar, 350);
+  });
+  elCapa.addEventListener("change", cargar);
+  elOrden.addEventListener("change", cargar);
+
+  cargar();
+</script>
+
+</body>
+</html>
