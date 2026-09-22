@@ -150,9 +150,8 @@
   // La "anon key" es pública y de solo lectura por diseño (Row Level
   // Security en la tabla solo permite SELECT) — es seguro tenerla aquí.
   // ------------------------------------------------------------------
-  const SUPABASE_URL = "PEGA_AQUI_TU_SUPABASE_URL";
-  const SUPABASE_ANON_KEY = "PEGA_AQUI_TU_SUPABASE_ANON_KEY";
-
+  const SUPABASE_URL = "https://gejcpvyhtppjntvawtkz.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_SWdFuwDD7u2Cf1gg-K2eqA_oaZ3ivBj";
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const elListado = document.getElementById("listado");
