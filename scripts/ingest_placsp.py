@@ -185,6 +185,14 @@ def entry_a_registro(entry, fuente: str, capa: str):
     )
     expediente = buscar_texto_por_tag(entry, "ContractFolderID")
 
+    # Código de estado real del expediente en PLACSP (PUB=publicada, EV=en evaluación,
+    # ADJ=adjudicada, RES=resuelta, DES=desierta, ANUL=anulada, PRE/PPT=pendiente...).
+    # Solo consideramos "abierta" (aceptando ofertas) el código PUB; el resto se marca
+    # como "cerrada" para poder filtrarlas en la web sin depender de la fecha límite,
+    # que no siempre viene informada en las actualizaciones posteriores del expediente.
+    codigo_estado = buscar_texto_por_tag(entry, "ContractFolderStatusCode")
+    estado = "abierta" if codigo_estado == "PUB" else "cerrada"
+
     # Enlace: PLACSP incluye un <link href="..."> con el detalle del expediente
     enlace = None
     for e in entry.iter():
@@ -208,6 +216,7 @@ def entry_a_registro(entry, fuente: str, capa: str):
         "fecha_publicacion": fecha_pub,
         "fecha_limite": fecha_limite,
         "enlace": enlace,
+        "estado": estado,
         "relevante_turismo": True,
     }
 
@@ -282,6 +291,14 @@ def main():
 
         print(f"  {len(registros)} relevantes de Turismo tras el filtro.")
         total_relevantes += len(registros)
+
+        # Resumen de estados detectados, para verificar que la extracción del código
+        # de estado funciona (si "desconocido" sale muy alto, revisar el nombre del tag).
+        conteo_estados = {}
+        for r in registros:
+            e = r.get("estado", "desconocido")
+            conteo_estados[e] = conteo_estados.get(e, 0) + 1
+        print(f"  Desglose por estado: {conteo_estados}")
 
         if DEBUG and registros:
             print("  --- Ejemplo de registro extraído (--debug) ---")
