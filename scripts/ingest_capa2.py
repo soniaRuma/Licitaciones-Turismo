@@ -72,7 +72,10 @@ def conector_cataluna(dias_atras: int = 3) -> list[dict]:
                 print(f"  [debug] registro completo de ejemplo: {filas[0]}")
                 primero_impreso = True
             for fila in filas:
-                clave = fila.get("id") or fila.get("numexp") or str(fila)
+                # Clave única real: id_intern es un identificador estable por publicación.
+                # (ANTES usábamos fila.get("id")/"numexp", que no existen en este dataset
+                # -> todos los registros generaban "CAT-None" y se pisaban entre sí).
+                clave = fila.get("id_intern") or f"{fila.get('codi_expedient')}-{fila.get('numero_lot')}"
                 resultados[clave] = fila
         except Exception as e:
             cuerpo = getattr(e, "response", None)
@@ -81,17 +84,33 @@ def conector_cataluna(dias_atras: int = 3) -> list[dict]:
 
     registros = []
     for fila in resultados.values():
+        # Campos reales confirmados el 24/09/2026 mirando un registro de ejemplo real
+        # (ver comentario [debug] en el log de ejecución). Antes de esto, estábamos
+        # adivinando nombres que no existían.
+        enlace_obj = fila.get("enllac_publicacio")
+        enlace = enlace_obj.get("url") if isinstance(enlace_obj, dict) else enlace_obj
+
+        # Este dataset parece mezclar publicaciones ya adjudicadas/agregadas (con
+        # fecha de adjudicación) con otras que podrían seguir abiertas. Usamos la
+        # presencia de "data_adjudicacio_contracte" como pista de que ya está
+        # cerrada; si no hay fecha de adjudicación, la dejamos como "abierta" a
+        # falta de mejor información (revisar en la web si esto da falsos positivos).
+        estado = "cerrada" if fila.get("data_adjudicacio_contracte") else "abierta"
+
         registros.append({
             "fuente": "CATALUNYA_PSCP",
             "capa": "capa2",
-            "expediente": fila.get("numexp") or fila.get("codi_expedient"),
-            "atom_entry_id": f"CAT-{fila.get('id') or fila.get('numexp')}",
-            "organismo": fila.get("organ_contractant") or fila.get("nom_organ"),
-            "titulo": fila.get("objecte_del_contracte") or fila.get("objecte_contracte"),
-            "importe": _parse_float(fila.get("pressupost_licitacio") or fila.get("import_adjudicacio")),
-            "fecha_publicacion": fila.get("data_publicacio"),
-            "fecha_limite": fila.get("data_fi_presentacio_ofertes"),
-            "enlace": fila.get("enllac_publicacio") or fila.get("url"),
+            "expediente": fila.get("codi_expedient"),
+            "atom_entry_id": f"CAT-{fila.get('id_intern') or fila.get('codi_expedient')}",
+            "organismo": fila.get("nom_organ"),
+            "titulo": fila.get("denominacio") or fila.get("objecte_contracte"),
+            "importe": _parse_float(
+                fila.get("pressupost_licitacio_sense") or fila.get("import_adjudicacio_sense")
+            ),
+            "fecha_publicacion": (fila.get("data_publicacio_contracte") or "")[:10] or None,
+            "fecha_limite": None,  # este dataset no trae plazo de presentación de ofertas
+            "enlace": enlace,
+            "estado": estado,
             "relevante_turismo": True,
         })
     return registros
