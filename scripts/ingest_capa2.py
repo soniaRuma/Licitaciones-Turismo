@@ -23,6 +23,7 @@ ESTADO ACTUAL DE CADA CONECTOR (revisar antes de activar el cron):
 
 import os
 import re
+import datetime
 import requests
 
 PALABRAS_CLAVE = [
@@ -42,26 +43,27 @@ PALABRAS_CLAVE = [
 CATALUNYA_SODA_URL = "https://analisi.transparenciacatalunya.cat/resource/ybgg-dgi6.json"
 
 
-def conector_cataluna(dias_atras: int = 3) -> list[dict]:
+def conector_cataluna(dias_atras: int = 7) -> list[dict]:
     """
-    Consulta el dataset Socrata de PSCP, filtrando por texto de Turismo en
-    el objeto del contrato (campo 'objecte_del_contracte' o similar —
-    revisar nombres exactos de columnas con la llamada de prueba que se
-    describe más abajo, ya que Socrata puede variar ligeramente los
-    nombres de campo entre datasets).
+    Consulta el dataset Socrata de PSCP, filtrando por texto de Turismo Y por
+    fecha de publicación reciente (últimos `dias_atras` días).
+
+    IMPORTANTE (corregido tras detectar el fallo): la primera versión de este
+    conector NO filtraba por fecha, así que traía todo el histórico del
+    dataset (hasta registros de 2018-2025), no solo lo publicado recientemente.
+    Ahora limitamos con $where sobre "data_publicacio_contracte".
     """
-    # $q hace una búsqueda de texto libre en todo el registro (Socrata SoQL).
-    # Combinamos varias palabras clave con OR uniendo varias llamadas, ya que
-    # $q no admite OR directamente en todos los datasets Socrata.
+    fecha_corte = (
+        datetime.date.today() - datetime.timedelta(days=dias_atras)
+    ).strftime("%Y-%m-%dT00:00:00.000")
+
     resultados = {}
     primero_impreso = False
     for palabra in ["turisme", "turístic", "turística", "promoció turística", "destinació turística"]:
-        # Quitamos "$order" (daba 400 Bad Request; "data_publicacio" no es un
-        # nombre de campo válido en este dataset). Sin orden, Socrata devuelve
-        # los resultados sin más criterio, lo cual es aceptable por ahora.
         params = {
             "$q": palabra,
-            "$limit": 200,
+            "$where": f"data_publicacio_contracte >= '{fecha_corte}'",
+            "$limit": 500,
         }
         try:
             resp = requests.get(CATALUNYA_SODA_URL, params=params, timeout=30)
