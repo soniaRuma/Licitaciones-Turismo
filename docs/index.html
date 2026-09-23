@@ -185,6 +185,7 @@
       .select("*")
       .order(ordenCampo, { ascending: ordenDir === "asc" })
       .limit(200);
+          query = query.or(`fecha_limite.gte.${new Date().toISOString().slice(0,10)},fecha_limite.is.null`);
 
     if (elCapa.value) {
       query = query.eq("capa", elCapa.value);
