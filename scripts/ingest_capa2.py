@@ -54,20 +54,30 @@ def conector_cataluna(dias_atras: int = 3) -> list[dict]:
     # Combinamos varias palabras clave con OR uniendo varias llamadas, ya que
     # $q no admite OR directamente en todos los datasets Socrata.
     resultados = {}
+    primero_impreso = False
     for palabra in ["turisme", "turístic", "turística", "promoció turística", "destinació turística"]:
+        # Quitamos "$order" (daba 400 Bad Request; "data_publicacio" no es un
+        # nombre de campo válido en este dataset). Sin orden, Socrata devuelve
+        # los resultados sin más criterio, lo cual es aceptable por ahora.
         params = {
             "$q": palabra,
             "$limit": 200,
-            "$order": "data_publicacio DESC",  # ajustar si el campo de fecha se llama distinto
         }
         try:
             resp = requests.get(CATALUNYA_SODA_URL, params=params, timeout=30)
             resp.raise_for_status()
-            for fila in resp.json():
+            filas = resp.json()
+            if not primero_impreso and filas:
+                print(f"  [debug] campos reales de un registro: {list(filas[0].keys())}")
+                print(f"  [debug] registro completo de ejemplo: {filas[0]}")
+                primero_impreso = True
+            for fila in filas:
                 clave = fila.get("id") or fila.get("numexp") or str(fila)
                 resultados[clave] = fila
         except Exception as e:
-            print(f"  [aviso] fallo consultando Cataluña con '{palabra}': {e}")
+            cuerpo = getattr(e, "response", None)
+            detalle = cuerpo.text[:300] if cuerpo is not None else ""
+            print(f"  [aviso] fallo consultando Cataluña con '{palabra}': {e} {detalle}")
 
     registros = []
     for fila in resultados.values():
