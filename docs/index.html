@@ -152,7 +152,7 @@
   // ------------------------------------------------------------------
   const SUPABASE_URL = "https://gejcpvyhtppjntvawtkz.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_SWdFuwDD7u2Cf1gg-K2eqA_oaZ3ivBj";
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const elListado = document.getElementById("listado");
   const elResumen = document.getElementById("resumen");
@@ -180,7 +180,7 @@
     elListado.innerHTML = "";
 
     const [ordenCampo, ordenDir] = elOrden.value.split(".");
-    let query = supabase
+    let query = supabaseClient
       .from("licitaciones")
       .select("*")
       .order(ordenCampo, { ascending: ordenDir === "asc" })
