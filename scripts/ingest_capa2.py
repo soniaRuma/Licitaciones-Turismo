@@ -92,12 +92,14 @@ def conector_cataluna(dias_atras: int = 7) -> list[dict]:
         enlace_obj = fila.get("enllac_publicacio")
         enlace = enlace_obj.get("url") if isinstance(enlace_obj, dict) else enlace_obj
 
-        # Este dataset parece mezclar publicaciones ya adjudicadas/agregadas (con
-        # fecha de adjudicación) con otras que podrían seguir abiertas. Usamos la
-        # presencia de "data_adjudicacio_contracte" como pista de que ya está
-        # cerrada; si no hay fecha de adjudicación, la dejamos como "abierta" a
-        # falta de mejor información (revisar en la web si esto da falsos positivos).
-        estado = "cerrada" if fila.get("data_adjudicacio_contracte") else "abierta"
+        # Verificado (24/09/2026): en la muestra real, todos los registros con
+        # fase_publicacio "Publicació agregada de contractes" son contratos
+        # menores YA resueltos (obligación trimestral de transparencia), igual
+        # que "PLACSP_MENOR". Los tratamos como "cerrada". Cualquier otra fase
+        # (p.ej. un anuncio de licitación real en curso) se deja como "abierta".
+        # También seguimos usando la fecha de adjudicación como señal adicional.
+        fase = (fila.get("fase_publicacio") or "").lower()
+        estado = "cerrada" if ("agregada" in fase or fila.get("data_adjudicacio_contracte")) else "abierta"
 
         registros.append({
             "fuente": "CATALUNYA_PSCP",
