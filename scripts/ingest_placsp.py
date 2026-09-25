@@ -63,6 +63,19 @@ PALABRAS_CLAVE = [
     "fitur", "feria de turismo", "oferta turística", "recursos turísticos",
 ]
 
+# Palabras clave de Desarrollo Digital (NUEVA CATEGORÍA, independiente de Turismo).
+# Se buscan en TODOS los organismos, sin exigir relación con turismo.
+PALABRAS_CLAVE_DIGITAL = [
+    "desarrollo web", "desarrollo de la web", "diseño web", "página web", "pagina web",
+    "portal web", "aplicación móvil", "aplicacion movil", "app móvil", "app movil",
+    "desarrollo de aplicaciones", "desarrollo de software", "plataforma digital",
+    "plataforma tecnológica", "plataforma web", "transformación digital",
+    "inteligencia artificial", "agente ia", "agentes de ia", "chatbot", "asistente virtual",
+    "machine learning", "aprendizaje automático", "sistema de información", "software a medida",
+    "desarrollo de sistema", "e-commerce", "comercio electrónico", "sistema informático",
+    "mantenimiento de aplicaciones", "mantenimiento web", "ciberseguridad",
+]
+
 # CPV relevantes (publicidad, marketing, comunicación, servicios turísticos, desarrollo web/apps)
 CPV_RELEVANTES_PREFIJOS = [
     "7952",  # servicios de publicidad
@@ -134,8 +147,8 @@ def buscar_todos_por_tag(elem, tag_local: str):
     return resultados
 
 
-def es_relevante_turismo(titulo: str, organismo: str, cpvs: list[str]) -> bool:
-    texto = f"{titulo or ''} {organismo or ''}".lower()
+def es_relevante_turismo(titulo: str, organismo: str, cpvs: list[str], texto_completo: str = "") -> bool:
+    texto = f"{titulo or ''} {organismo or ''} {texto_completo or ''}".lower()
     if any(palabra in texto for palabra in PALABRAS_CLAVE):
         return True
     for cpv in cpvs:
@@ -146,6 +159,12 @@ def es_relevante_turismo(titulo: str, organismo: str, cpvs: list[str]) -> bool:
                 if any(p in texto for p in ["turis", "destino", "fitur"]):
                     return True
     return False
+
+
+def es_relevante_digital(titulo: str, organismo: str, texto_completo: str = "") -> bool:
+    """Categoría independiente de Turismo: cualquier organismo, cualquier área."""
+    texto = f"{titulo or ''} {organismo or ''} {texto_completo or ''}".lower()
+    return any(palabra in texto for palabra in PALABRAS_CLAVE_DIGITAL)
 
 
 def parsear_fecha(texto: str):
@@ -185,6 +204,16 @@ def entry_a_registro(entry, fuente: str, capa: str):
     )
     expediente = buscar_texto_por_tag(entry, "ContractFolderID")
 
+    # RED DE SEGURIDAD (añadida tras detectar que una licitación con "turística"
+    # en el título no se estaba capturando): en vez de fiarnos solo del título ya
+    # extraído, unimos el texto de TODOS los elementos del registro y buscamos
+    # las palabras clave ahí también. Así, aunque la extracción del "título"
+    # falle o coja el campo equivocado, si la palabra aparece en cualquier parte
+    # del XML (objeto del contrato, descripción, etc.), igualmente se detecta.
+    texto_completo = " ".join(
+        (e.text or "").strip() for e in entry.iter() if e.text and e.text.strip()
+    )
+
     # Código de estado real del expediente en PLACSP (PUB=publicada, EV=en evaluación,
     # ADJ=adjudicada, RES=resuelta, DES=desierta, ANUL=anulada, PRE/PPT=pendiente...).
     # Solo consideramos "abierta" (aceptando ofertas) el código PUB; el resto se marca
@@ -201,8 +230,17 @@ def entry_a_registro(entry, fuente: str, capa: str):
             enlace = e.get("href")
             break
 
-    if not es_relevante_turismo(titulo, organismo, cpvs):
+    es_turismo = es_relevante_turismo(titulo, organismo, cpvs, texto_completo)
+    es_digital = es_relevante_digital(titulo, organismo, texto_completo)
+
+    if not es_turismo and not es_digital:
         return None
+
+    categorias = []
+    if es_turismo:
+        categorias.append("turismo")
+    if es_digital:
+        categorias.append("digital")
 
     return {
         "fuente": fuente,
@@ -217,6 +255,7 @@ def entry_a_registro(entry, fuente: str, capa: str):
         "fecha_limite": fecha_limite,
         "enlace": enlace,
         "estado": estado,
+        "categoria": ",".join(categorias),
         "relevante_turismo": True,
     }
 
