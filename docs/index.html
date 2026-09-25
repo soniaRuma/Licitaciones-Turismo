@@ -132,6 +132,11 @@
     <option value="capa2">Capa 2 — Autonómicas</option>
     <option value="capa3">Capa 3 — Webs propias</option>
   </select>
+      <select id="filtroCategoria">
+        <option value="">Todas las categorías</option>
+        <option value="turismo">Turismo</option>
+        <option value="digital">Desarrollo Digital</option>
+      </select>
   <select id="filtroOrden">
     <option value="fecha_publicacion.desc">Más recientes primero</option>
     <option value="fecha_limite.asc">Plazo más próximo primero</option>
@@ -158,6 +163,7 @@
   const elResumen = document.getElementById("resumen");
   const elBusqueda = document.getElementById("busqueda");
   const elCapa = document.getElementById("filtroCapa");
+  const elCategoria = document.getElementById("filtroCategoria");
   const elOrden = document.getElementById("filtroOrden");
 
   function formatoFecha(f) {
@@ -190,6 +196,10 @@
     if (elCapa.value) {
       query = query.eq("capa", elCapa.value);
     }
+    
+    if (elCategoria.value) {
+      query = query.ilike("categoria", `%${elCategoria.value}%`);
+    }
     const texto = elBusqueda.value.trim();
     if (texto) {
       query = query.or(`titulo.ilike.%${texto}%,organismo.ilike.%${texto}%`);
@@ -201,7 +211,7 @@
       elResumen.textContent = "Error cargando datos: " + error.message;
       return;
     }
-
+    
     if (!data || data.length === 0) {
       elResumen.textContent = "0 licitaciones encontradas.";
       elListado.innerHTML = '<div class="vacio">No hay licitaciones que coincidan con este filtro.</div>';
@@ -243,6 +253,7 @@
     temporizador = setTimeout(cargar, 350);
   });
   elCapa.addEventListener("change", cargar);
+  elCategoria.addEventListener("change", cargar);
   elOrden.addEventListener("change", cargar);
 
   cargar();
