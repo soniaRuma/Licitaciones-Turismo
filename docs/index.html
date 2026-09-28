@@ -181,6 +181,16 @@
     return { capa1: "PLACSP", capa2: "Autonómica", capa3: "Web propia" }[c] || c;
   }
 
+  const TERRITORIOS = {
+    CATALUNYA_PSCP: "Cataluña", EUSKADI: "Euskadi", GALICIA: "Galicia",
+    MADRID_CCAA: "Madrid", ANDALUCIA: "Andalucía", NAVARRA: "Navarra", LA_RIOJA: "La Rioja",
+  };
+
+  function etiqueta(l) {
+    const t = TERRITORIOS[l.fuente];
+    return t ? `${nombreCapa(l.capa)} · ${t}` : nombreCapa(l.capa);
+  }
+
   async function cargar() {
     elResumen.textContent = "Cargando licitaciones...";
     elListado.innerHTML = "";
@@ -227,7 +237,7 @@
       <div class="tarjeta">
         <div class="fila-top">
           <div class="organismo">${escapeHtml(l.organismo || "Organismo no especificado")}</div>
-          <div class="capa-badge">${nombreCapa(l.capa)}</div>
+          <div class="capa-badge">${etiqueta(l)}</div>
         </div>
         <div class="titulo">${escapeHtml(l.titulo || "(sin título)")}</div>
         <div class="meta">
