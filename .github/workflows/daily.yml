@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     # Si algo se queda colgado (p.ej. el servidor de Hacienda no responde),
     # se corta a los 45 minutos en vez de esperar las 6 horas por defecto de GitHub.
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       # Muestra los mensajes del script en el log EN DIRECTO. Sin esto, Python
       # los guarda y solo aparecen al final, y no se puede ver en qué paso va.
