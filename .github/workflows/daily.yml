@@ -2,13 +2,44 @@ name: Actualización diaria de licitaciones de Turismo
 
 on:
   schedule:
-    # Se ejecuta todos los días a las 06:00 hora española (04:00 UTC en horario de verano, 05:00 en invierno).
-    # GitHub Actions usa siempre UTC, por eso ponemos 05:00 UTC como término medio razonable.
-    - cron: "0 5 * * *"
-  workflow_dispatch: {}   # permite lanzarlo manualmente desde la pestaña "Actions" de GitHub
+    # Objetivo: todos los días a las 15:00 hora de España.
+    # GitHub Actions solo entiende UTC y España cambia de hora dos veces al año,
+    # así que programamos DOS horarios y el job "comprobar_hora" deja pasar
+    # solo el que corresponde a las 15:00 españolas según la época del año:
+    #   - 13:00 UTC = 15:00 en horario de verano (CEST, UTC+2)
+    #   - 14:00 UTC = 15:00 en horario de invierno (CET, UTC+1)
+    - cron: "0 13 * * *"
+    - cron: "0 14 * * *"
+  workflow_dispatch: {}   # permite lanzarlo manualmente desde la pestaña "Actions" de GitHub (siempre se ejecuta)
 
 jobs:
+  comprobar_hora:
+    runs-on: ubuntu-latest
+    outputs:
+      ejecutar: ${{ steps.hora.outputs.ejecutar }}
+    steps:
+      - name: Comprobar si toca ejecutar (15:00 en España)
+        id: hora
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "Lanzamiento manual: se ejecuta siempre."
+            echo "ejecutar=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          OFFSET=$(TZ=Europe/Madrid date +%z)   # +0200 en verano, +0100 en invierno
+          PROGRAMACION="${{ github.event.schedule }}"
+          if { [ "$PROGRAMACION" = "0 13 * * *" ] && [ "$OFFSET" = "+0200" ]; } || \
+             { [ "$PROGRAMACION" = "0 14 * * *" ] && [ "$OFFSET" = "+0100" ]; }; then
+            echo "Son las 15:00 en España (offset $OFFSET): se ejecuta."
+            echo "ejecutar=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Esta programación ($PROGRAMACION) no corresponde a las 15:00 españolas con offset $OFFSET: se omite."
+            echo "ejecutar=false" >> "$GITHUB_OUTPUT"
+          fi
+
   actualizar:
+    needs: comprobar_hora
+    if: needs.comprobar_hora.outputs.ejecutar == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Descargar el código del repositorio
