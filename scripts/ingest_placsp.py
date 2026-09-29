@@ -110,12 +110,14 @@ ORGANISMO_GENERICO = [
 # Se comparan como PREFIJO: "79341" incluye 79341000, 79341400, etc.
 # (La lista original tenía errores: 7952 es reprografía y 9832 peluquería.)
 CPV_TURISMO_SIEMPRE = [
-    "63510000",  # agencias de viajes y servicios similares
-    "63511000",  # organización de viajes combinados
     "63513000",  # información turística
     "63514000",  # guías turísticos
 ]
 CPV_TURISMO_CON_CONTEXTO = [
+    # Agencias de viajes: también se usan para viajes de personal, misiones
+    # comerciales o logística de eventos, así que exigen contexto turístico.
+    "63510000",  # agencias de viajes y servicios similares
+    "63511000",  # organización de viajes combinados
     "79340000",  # servicios de publicidad y de marketing
     "79341",     # servicios de publicidad (incl. 79341400 campañas de publicidad)
     "79342000",  # servicios de marketing
@@ -127,6 +129,23 @@ CPV_TURISMO_CON_CONTEXTO = [
     "79952000",  # servicios de eventos
     "79956000",  # organización de ferias y exposiciones
 ]
+# En español "turismo" también significa COCHE ("vehículo turismo", "renting de
+# turismos"). Estas expresiones se eliminan del texto antes de buscar palabras
+# de turismo, para que un suministro de vehículos no cuente como turístico.
+TURISMO_VEHICULO = re.compile(
+    r"\bturismos\b"
+    r"|\b(veh[ií]culos?|coches?|autom[oó]vil(es)?|tipo|categor[ií]a|clase|modelo|renting|arrendamiento|alquiler"
+    r"|adquisici[oó]n|suministro|flota|lote\s*\d*\s*:?)\s+(de\s+)?(tipo\s+)?turismo\b"
+    r"|\bturismo\s+(el[eé]ctrico|h[ií]brido|4x4|todoterreno|patrulla|camuflado|berlina|sed[aá]n|compacto"
+    r"|segmento|utilitario|gasolina|di[eé]sel|\d+\s+plazas|de\s+\d+\s+plazas|sin\s+distintivo)",
+    re.IGNORECASE,
+)
+
+
+def quitar_turismo_vehiculo(texto: str) -> str:
+    return TURISMO_VEHICULO.sub(" ", texto or "")
+
+
 # Palabras que dan "contexto turístico" a los CPV anteriores.
 CONTEXTO_TURISTICO = [
     "turis", "turís", "turism", "fitur", "visitante", "marca destino",
@@ -360,7 +379,7 @@ def _tiene_cpv(cpvs: list[str], prefijos: list[str]) -> bool:
 
 def es_relevante_turismo(titulo: str, organismo: str, cpvs: list[str], objeto: str = "") -> bool:
     """Palabra clave, organismo turístico, CPV turístico, o CPV de marketing/eventos con contexto turístico."""
-    texto = f"{titulo or ''} {objeto or ''}".lower()
+    texto = quitar_turismo_vehiculo(f"{titulo or ''} {objeto or ''}").lower()
     return (
         any(palabra in texto for palabra in PALABRAS_CLAVE)
         or es_organismo_turistico(organismo)
