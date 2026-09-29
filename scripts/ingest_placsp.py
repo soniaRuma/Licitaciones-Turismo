@@ -101,10 +101,21 @@ ORGANISMO_GENERICO = [
     "secretaría general", "secretaria general",
 ]
 
-# CPV de Turismo (opción "O", 29/09/2026): basta con que el contrato tenga uno.
+# CPV de Turismo (ajustado el 29/09/2026 tras revisar la web):
+#  - CPV_TURISMO_SIEMPRE: inequívocamente turísticos, entran solos.
+#  - CPV_TURISMO_CON_CONTEXTO: marketing, publicidad, diseño y eventos. Entran
+#    SOLO si el objeto del contrato habla de turismo. Sin esta condición se
+#    colaban campañas y diseño gráfico de cualquier organismo (universidades,
+#    consorcios de transporte, planes urbanos...).
 # Se comparan como PREFIJO: "79341" incluye 79341000, 79341400, etc.
-# (La lista anterior tenía errores: 7952 es reprografía y 9832 peluquería.)
-CPV_TURISMO_PREFIJOS = [
+# (La lista original tenía errores: 7952 es reprografía y 9832 peluquería.)
+CPV_TURISMO_SIEMPRE = [
+    "63510000",  # agencias de viajes y servicios similares
+    "63511000",  # organización de viajes combinados
+    "63513000",  # información turística
+    "63514000",  # guías turísticos
+]
+CPV_TURISMO_CON_CONTEXTO = [
     "79340000",  # servicios de publicidad y de marketing
     "79341",     # servicios de publicidad (incl. 79341400 campañas de publicidad)
     "79342000",  # servicios de marketing
@@ -115,10 +126,11 @@ CPV_TURISMO_PREFIJOS = [
     "79950000",  # organización de exposiciones, ferias y congresos
     "79952000",  # servicios de eventos
     "79956000",  # organización de ferias y exposiciones
-    "63510000",  # agencias de viajes y servicios similares
-    "63511000",  # organización de viajes combinados
-    "63513000",  # información turística
-    "63514000",  # guías turísticos
+]
+# Palabras que dan "contexto turístico" a los CPV anteriores.
+CONTEXTO_TURISTICO = [
+    "turis", "turís", "turism", "fitur", "visitante", "marca destino",
+    "promoción del destino", "promocion del destino", "destino turístico", "destino turistico",
 ]
 
 # Palabras clave de Desarrollo Digital (en el objeto del contrato).
@@ -347,12 +359,13 @@ def _tiene_cpv(cpvs: list[str], prefijos: list[str]) -> bool:
 
 
 def es_relevante_turismo(titulo: str, organismo: str, cpvs: list[str], objeto: str = "") -> bool:
-    """Opción O: palabra clave, organismo turístico o CPV de la lista."""
+    """Palabra clave, organismo turístico, CPV turístico, o CPV de marketing/eventos con contexto turístico."""
     texto = f"{titulo or ''} {objeto or ''}".lower()
     return (
         any(palabra in texto for palabra in PALABRAS_CLAVE)
         or es_organismo_turistico(organismo)
-        or _tiene_cpv(cpvs, CPV_TURISMO_PREFIJOS)
+        or _tiene_cpv(cpvs, CPV_TURISMO_SIEMPRE)
+        or (_tiene_cpv(cpvs, CPV_TURISMO_CON_CONTEXTO) and any(c in texto for c in CONTEXTO_TURISTICO))
     )
 
 
