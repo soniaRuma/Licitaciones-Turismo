@@ -8,9 +8,9 @@ licitaciones ya normalizadas (mismo formato que en ingest_placsp.py) para
 que se puedan guardar en la misma tabla de Supabase.
 
 ESTADO ACTUAL DE CADA CONECTOR:
-  ✅ CATALUÑA   — API abierta Socrata del portal de transparencia
-                  (analisi.transparenciacatalunya.cat), dataset "ybgg-dgi6".
-  🆕 EUSKADI, GALICIA, MADRID, ANDALUCÍA, NAVARRA, LA RIOJA — un único
+  ⏸  CATALUÑA (Socrata) — desactivado el 29/09/2026: Cataluña se lee ahora
+                  desde el feed agregado de abajo (trae licitaciones abiertas).
+  ✅ CATALUÑA, EUSKADI, GALICIA, MADRID, ANDALUCÍA, NAVARRA, LA RIOJA — un único
                   conector: el feed oficial de PLACSP "Plataformas agregadas"
                   (sindicación 1044). Por ley (LCSP), las plataformas
                   autonómicas reenvían a PLACSP sus convocatorias y resultados
@@ -154,7 +154,10 @@ AGREGADAS_BASE = "PlataformasAgregadasSinMenores"
 # arriba (si no, saldría duplicada con otro id). Si algún día prefieres usar
 # este feed también para Cataluña (trae plazos y estado real de la licitación),
 # añade "CATALUNYA" aquí y desactiva el conector Socrata.
-TERRITORIOS_INCLUIDOS = {"EUSKADI", "GALICIA", "MADRID_CCAA", "ANDALUCIA", "NAVARRA", "LA_RIOJA"}
+TERRITORIOS_INCLUIDOS = {"EUSKADI", "GALICIA", "MADRID_CCAA", "ANDALUCIA", "NAVARRA", "LA_RIOJA", "CATALUNYA"}
+# (29/09/2026) Cataluña pasa a leerse desde este feed: trae licitaciones abiertas
+# con su plazo, mientras que el conector Socrata traía casi solo contratos
+# menores ya cerrados (3 relevantes frente a 13.000 entradas catalanas al mes).
 
 # Pista 1: dominios web de cada plataforma autonómica. Se buscan en cualquier
 # URL que aparezca dentro de la entrada (perfil del contratante, enlaces, etc.).
@@ -224,31 +227,26 @@ def detectar_territorio(entry) -> tuple[str | None, str]:
     return None, "sin_clasificar"
 
 
-def conector_placsp_agregadas(yyyymm: str | None = None) -> list[dict]:
-    yyyymm = yyyymm or datetime.date.today().strftime("%Y%m")
-    zip_bytes = capa1.descargar_zip(AGREGADAS_ID, AGREGADAS_BASE, yyyymm)
-    if not zip_bytes:
-        return []
-
-    entradas = capa1.extraer_entradas_atom(zip_bytes)
-    print(f"  {len(entradas)} entradas totales en el feed agregado de {yyyymm}.")
-
+def conector_placsp_agregadas() -> list[dict]:
+    # Misma lógica de lectura que la Capa 1: novedades de los últimos días (o
+    # carga histórica si se lanza con meses_historico), con respaldo mensual.
     registros = []
-    conteo_territorio, conteo_pista, sin_clasificar = {}, {}, []
-    for entry in entradas:
-        territorio, pista = detectar_territorio(entry)
-        conteo_territorio[territorio or "?"] = conteo_territorio.get(territorio or "?", 0) + 1
-        conteo_pista[pista] = conteo_pista.get(pista, 0) + 1
-        if territorio is None and len(sin_clasificar) < 3:
-            sin_clasificar.append(entry)
-        if territorio not in TERRITORIOS_INCLUIDOS:
-            continue
+    conteo_territorio, conteo_pista, sin_clasificar, total = {}, {}, [], 0
+    for etiqueta, entradas in capa1.obtener_lotes(AGREGADAS_ID, AGREGADAS_BASE, historico=True):
+        total += len(entradas)
+        for entry in entradas:
+            territorio, pista = detectar_territorio(entry)
+            conteo_territorio[territorio or "?"] = conteo_territorio.get(territorio or "?", 0) + 1
+            conteo_pista[pista] = conteo_pista.get(pista, 0) + 1
+            if territorio is None and len(sin_clasificar) < 3:
+                sin_clasificar.append(entry)
+            if territorio not in TERRITORIOS_INCLUIDOS:
+                continue
+            reg = capa1.entry_a_registro(entry, fuente=territorio, capa="capa2")
+            if reg:
+                registros.append(reg)
 
-        reg = capa1.entry_a_registro(entry, fuente=territorio, capa="capa2")
-        if reg:
-            registros.append(reg)
-
-    # Diagnóstico siempre visible en el log de GitHub Actions (es corto):
+    print(f"  {total} entradas en el feed agregado.")
     print(f"  Reparto por territorio (todas las entradas): {conteo_territorio}")
     print(f"  Pista usada para clasificar: {conteo_pista}")
     por_fuente = {}
@@ -261,7 +259,7 @@ def conector_placsp_agregadas(yyyymm: str | None = None) -> list[dict]:
             texto = " ".join((x.text or "").strip() for x in e.iter() if x.text and x.text.strip())
             print(f"  [debug] entrada sin clasificar: {texto[:600]}")
         if registros:
-            print(f"  [debug] ejemplo de registro: {registros[0]}")
+            print(f"  [debug] ejemplo de registro: {registros[-1]}")
 
     return registros
 
@@ -272,9 +270,10 @@ def conector_placsp_agregadas(yyyymm: str | None = None) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 CONECTORES_ACTIVOS = {
-    "CATALUNYA_PSCP": conector_cataluna,
-    # Un solo conector para Euskadi, Galicia, Madrid, Andalucía, Navarra y La Rioja.
-    # Cada registro sale con su propio "fuente" (EUSKADI, GALICIA, MADRID_CCAA, ...).
+    # Un solo conector para los 7 territorios (Cataluña, Euskadi, Galicia, Madrid,
+    # Andalucía, Navarra, La Rioja). Cada registro sale con su propio "fuente".
+    # El conector Socrata de Cataluña (conector_cataluna) queda desactivado pero
+    # se conserva arriba por si hiciera falta volver a él.
     "PLACSP_AGREGADAS": conector_placsp_agregadas,
 }
 
@@ -289,7 +288,7 @@ def main():
     for nombre, funcion in CONECTORES_ACTIVOS.items():
         print(f"Consultando {nombre}...")
         registros = funcion()
-        print(f"  {len(registros)} licitaciones de Turismo encontradas.")
+        print(f"  {len(registros)} licitaciones relevantes encontradas.")
         total += len(registros)
         guardar_en_supabase(registros, nombre)
     print(f"\nHecho. Total Capa 2 hoy: {total}")
