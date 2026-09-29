@@ -101,34 +101,62 @@ ORGANISMO_GENERICO = [
     "secretaría general", "secretaria general",
 ]
 
-# CPV de marketing/publicidad/turismo: cuentan como Turismo solo si el objeto
-# del contrato también habla de turismo o destino.
-CPV_RELEVANTES_PREFIJOS = [
-    "7952",  # servicios de publicidad
-    "7954",  # servicios de promoción
-    "7934",  # servicios de marketing / relaciones públicas
-    "6339",  # información turística
-    "5511",  # servicios de alojamiento
-    "9832",  # fotografía / producción audiovisual
+# CPV de Turismo (opción "O", 29/09/2026): basta con que el contrato tenga uno.
+# Se comparan como PREFIJO: "79341" incluye 79341000, 79341400, etc.
+# (La lista anterior tenía errores: 7952 es reprografía y 9832 peluquería.)
+CPV_TURISMO_PREFIJOS = [
+    "79340000",  # servicios de publicidad y de marketing
+    "79341",     # servicios de publicidad (incl. 79341400 campañas de publicidad)
+    "79342000",  # servicios de marketing
+    "79342200",  # servicios de promoción
+    "79413000",  # consultoría en gestión de marketing
+    "79416",     # relaciones públicas
+    "79822500",  # diseño gráfico
+    "79950000",  # organización de exposiciones, ferias y congresos
+    "79952000",  # servicios de eventos
+    "79956000",  # organización de ferias y exposiciones
+    "63510000",  # agencias de viajes y servicios similares
+    "63511000",  # organización de viajes combinados
+    "63513000",  # información turística
+    "63514000",  # guías turísticos
 ]
 
 # Palabras clave de Desarrollo Digital (en el objeto del contrato).
 PALABRAS_CLAVE_DIGITAL = [
+    # Web y software
     "desarrollo web", "desarrollo de la web", "diseño web", "página web", "pagina web",
-    "portal web", "aplicación móvil", "aplicacion movil", "app móvil", "app movil",
-    "desarrollo de aplicaciones", "desarrollo de software", "plataforma digital",
-    "plataforma tecnológica", "plataforma web", "transformación digital",
-    "inteligencia artificial", "agente ia", "agentes de ia", "chatbot", "asistente virtual",
-    "machine learning", "aprendizaje automático", "sistema de información", "software a medida",
-    "desarrollo de sistema", "e-commerce", "comercio electrónico", "sistema informático",
+    "portal web", "plataforma web", "desarrollo de software", "desarrollo software",
+    "software a medida", "desarrollo de aplicaciones", "aplicación móvil", "aplicacion movil",
+    "app móvil", "app movil", "desarrollo digital", "desarrollo tecnológico", "desarrollo tecnologico",
+    "desarrollo de plataforma", "transformación digital", "transformacion digital",
+    "plataforma digital", "plataforma tecnológica", "plataforma tecnologica",
+    # IA
+    "inteligencia artificial", "ia generativa", "chatbot", "chat bot", "asistente virtual",
+    "asistente conversacional", "agente ia", "agentes ia", "agente de ia", "agentes de ia",
+    "agente de voz", "agentes de voz", "voicebot", "machine learning", "aprendizaje automático",
+    "aprendizaje automatico", "procesamiento del lenguaje natural", "modelos de lenguaje",
+    # Otros
+    "e-commerce", "comercio electrónico", "comercio electronico", "sistema de información",
+    "sistema de informacion", "sistema informático", "sistema informatico",
     "mantenimiento de aplicaciones", "mantenimiento web", "ciberseguridad",
 ]
 
-# CPV de Desarrollo Digital: basta con que el contrato tenga uno de ellos.
+# Siglas que solo cuentan como PALABRA COMPLETA (si no, "ia" se colaría en
+# "material", "farmacia" o "Galicia").
+SIGLAS_DIGITAL = re.compile(r"\b(ia|llm|llms)\b", re.IGNORECASE)
+
+# CPV de Desarrollo Digital (opción "O"): basta con que el contrato tenga uno.
+# No existen códigos CPV específicos de IA o chatbots: se clasifican en estos.
 CPV_DIGITAL_PREFIJOS = [
-    "722",       # 72200000-72268000: programación, consultoría, desarrollo y mantenimiento de software
-    "7241",      # 72410000-72417000: proveedores de servicios (diseño web 72413, hosting 72415, aplicaciones/SaaS 72416...)
-    "72000000",  # servicios TI genéricos
+    "72000000",  # servicios TI: consultoría, desarrollo de software, Internet y apoyo
+    "72200000",  # programación de software y consultoría
+    "7221",      # programación de paquetes de software (incl. 72212000 software de aplicación)
+    "7223",      # desarrollo de software personalizado
+    "72262000",  # desarrollo de software
+    "72413000",  # diseño de sitios web
+    "72416000",  # proveedores de servicios de aplicaciones (SaaS)
+    "7242",      # desarrollo de Internet (incl. 72421000 aplicaciones web)
+    "79512000",  # centro de atención de llamadas (donde suelen ir los agentes de voz)
 ]
 
 NS_ATOM = {"atom": "http://www.w3.org/2005/Atom"}
@@ -314,25 +342,29 @@ def es_organismo_turistico(organismo: str) -> bool:
     return any(k in org for k in ORGANISMO_TURISTICO) and not any(g in org for g in ORGANISMO_GENERICO)
 
 
+def _tiene_cpv(cpvs: list[str], prefijos: list[str]) -> bool:
+    return any(cpv.strip().startswith(p) for cpv in cpvs for p in prefijos)
+
+
 def es_relevante_turismo(titulo: str, organismo: str, cpvs: list[str], objeto: str = "") -> bool:
+    """Opción O: palabra clave, organismo turístico o CPV de la lista."""
     texto = f"{titulo or ''} {objeto or ''}".lower()
-    if any(palabra in texto for palabra in PALABRAS_CLAVE):
-        return True
-    if es_organismo_turistico(organismo):
-        return True
-    for cpv in cpvs:
-        if any(cpv.startswith(p) for p in CPV_RELEVANTES_PREFIJOS):
-            if any(p in texto for p in ["turis", "destino", "fitur"]):
-                return True
-    return False
+    return (
+        any(palabra in texto for palabra in PALABRAS_CLAVE)
+        or es_organismo_turistico(organismo)
+        or _tiene_cpv(cpvs, CPV_TURISMO_PREFIJOS)
+    )
 
 
 def es_relevante_digital(titulo: str, cpvs: list[str], objeto: str = "") -> bool:
-    """Categoría independiente de Turismo: cualquier organismo, cualquier área."""
-    texto = f"{titulo or ''} {objeto or ''}".lower()
-    if any(palabra in texto for palabra in PALABRAS_CLAVE_DIGITAL):
-        return True
-    return any(cpv.startswith(p) for cpv in cpvs for p in CPV_DIGITAL_PREFIJOS)
+    """Opción O: palabra clave (o sigla IA/LLM como palabra completa) o CPV de la lista."""
+    texto = f"{titulo or ''} {objeto or ''}"
+    bajo = texto.lower()
+    return (
+        any(palabra in bajo for palabra in PALABRAS_CLAVE_DIGITAL)
+        or bool(SIGLAS_DIGITAL.search(texto))
+        or _tiene_cpv(cpvs, CPV_DIGITAL_PREFIJOS)
+    )
 
 
 def extraer_organismo(entry):
