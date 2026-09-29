@@ -146,6 +146,24 @@ def quitar_turismo_vehiculo(texto: str) -> str:
     return TURISMO_VEHICULO.sub(" ", texto or "")
 
 
+# Si el CPV PRINCIPAL (el primero) es de una de estas familias, el contrato NO
+# cuenta como Turismo aunque lo contrate un organismo turístico o mencione el
+# turismo: son compras operativas sin interés comercial (obras, vigilancia...).
+CPV_PRINCIPAL_EXCLUIDO_TURISMO = [
+    "45",    # obras de construcción
+    "71",    # arquitectura, ingeniería, dirección de obra
+    "7971",  # vigilancia y seguridad
+    "909",   # limpieza
+    "507",   # reparación y mantenimiento de instalaciones de edificios
+    "0931",  # electricidad
+    "6510",  # agua
+    "665",   # seguros
+    "341",   # vehículos de motor
+    "601",   # transporte por carretera (autobuses, etc.)
+    "391",   # mobiliario
+    "301",   # material y máquinas de oficina
+]
+
 # Palabras que dan "contexto turístico" a los CPV anteriores.
 CONTEXTO_TURISTICO = [
     "turis", "turís", "turism", "fitur", "visitante", "marca destino",
@@ -379,6 +397,8 @@ def _tiene_cpv(cpvs: list[str], prefijos: list[str]) -> bool:
 
 def es_relevante_turismo(titulo: str, organismo: str, cpvs: list[str], objeto: str = "") -> bool:
     """Palabra clave, organismo turístico, CPV turístico, o CPV de marketing/eventos con contexto turístico."""
+    if cpvs and any(cpvs[0].strip().startswith(p) for p in CPV_PRINCIPAL_EXCLUIDO_TURISMO):
+        return False
     texto = quitar_turismo_vehiculo(f"{titulo or ''} {objeto or ''}").lower()
     return (
         any(palabra in texto for palabra in PALABRAS_CLAVE)
