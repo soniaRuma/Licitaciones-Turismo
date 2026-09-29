@@ -182,7 +182,7 @@
   }
 
   const TERRITORIOS = {
-    CATALUNYA_PSCP: "Cataluña", EUSKADI: "Euskadi", GALICIA: "Galicia",
+    CATALUNYA_PSCP: "Cataluña", CATALUNYA: "Cataluña", EUSKADI: "Euskadi", GALICIA: "Galicia",
     MADRID_CCAA: "Madrid", ANDALUCIA: "Andalucía", NAVARRA: "Navarra", LA_RIOJA: "La Rioja",
   };
 
@@ -200,7 +200,7 @@
       .from("licitaciones")
       .select("*")
       .order(ordenCampo, { ascending: ordenDir === "asc" })
-      .limit(200);
+      .limit(1000);
              query = query.eq("estado", "abierta");
 
     if (elCapa.value) {
