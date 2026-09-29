@@ -99,6 +99,14 @@ ORGANISMO_GENERICO = [
     "ministerio", "consejería", "consejeria", "conselleria", "consellería",
     "departamento", "departament", "vicepresidencia", "vicepresidència",
     "secretaría general", "secretaria general",
+    "diputado", "diputada", "diputado/a",  # p.ej. "Diputado/a Foral de Fomento del Empleo, Comercio y Turismo"
+]
+# Entidades cuya razón de ser es el turismo: cuentan SIEMPRE como turísticas,
+# aunque su nombre incluya también una palabra genérica (p.ej. "Vicepresidencia
+# del Patronato Provincial de Turismo de Granada").
+ENTIDAD_TURISTICA = [
+    "patronato", "consorcio", "consorci", "agencia", "agència", "instituto", "institut",
+    "sociedad", "societat", "fundación", "fundació", "empresa", "ente ",
 ]
 
 # CPV de Turismo (ajustado el 29/09/2026 tras revisar la web):
@@ -388,7 +396,11 @@ def texto_objeto(entry) -> str:
 
 def es_organismo_turistico(organismo: str) -> bool:
     org = (organismo or "").lower()
-    return any(k in org for k in ORGANISMO_TURISTICO) and not any(g in org for g in ORGANISMO_GENERICO)
+    if not any(k in org for k in ORGANISMO_TURISTICO):
+        return False
+    if any(e in org for e in ENTIDAD_TURISTICA):
+        return True
+    return not any(g in org for g in ORGANISMO_GENERICO)
 
 
 def _tiene_cpv(cpvs: list[str], prefijos: list[str]) -> bool:
