@@ -183,40 +183,47 @@ CONTEXTO_TURISTICO = [
 
 # Palabras clave de Desarrollo Digital (en el objeto del contrato).
 PALABRAS_CLAVE_DIGITAL = [
+    # (30/09/2026) Se quitan las genéricas que metían informática de la
+    # administración en general: "sistema de información", "sistema informático",
+    # "comercio electrónico", "mantenimiento de aplicaciones", "ciberseguridad",
+    # "desarrollo tecnológico", "plataforma tecnológica", "desarrollo de plataforma".
     # Web y software
     "desarrollo web", "desarrollo de la web", "diseño web", "página web", "pagina web",
-    "portal web", "plataforma web", "desarrollo de software", "desarrollo software",
+    "páginas web", "paginas web", "sitio web", "sitios web", "portal web", "portales web",
+    "plataforma web", "mantenimiento web", "desarrollo de software", "desarrollo software",
     "software a medida", "desarrollo de aplicaciones", "aplicación móvil", "aplicacion movil",
-    "app móvil", "app movil", "desarrollo digital", "desarrollo tecnológico", "desarrollo tecnologico",
-    "desarrollo de plataforma", "transformación digital", "transformacion digital",
-    "plataforma digital", "plataforma tecnológica", "plataforma tecnologica",
+    "aplicaciones móviles", "aplicaciones moviles", "app móvil", "app movil",
+    "desarrollo digital", "transformación digital", "transformacion digital", "plataforma digital",
+    "e-commerce",
     # IA
     "inteligencia artificial", "ia generativa", "chatbot", "chat bot", "asistente virtual",
     "asistente conversacional", "agente ia", "agentes ia", "agente de ia", "agentes de ia",
     "agente de voz", "agentes de voz", "voicebot", "machine learning", "aprendizaje automático",
     "aprendizaje automatico", "procesamiento del lenguaje natural", "modelos de lenguaje",
-    # Otros
-    "e-commerce", "comercio electrónico", "comercio electronico", "sistema de información",
-    "sistema de informacion", "sistema informático", "sistema informatico",
-    "mantenimiento de aplicaciones", "mantenimiento web", "ciberseguridad",
 ]
 
 # Siglas que solo cuentan como PALABRA COMPLETA (si no, "ia" se colaría en
 # "material", "farmacia" o "Galicia").
 SIGLAS_DIGITAL = re.compile(r"\b(ia|llm|llms)\b", re.IGNORECASE)
 
-# CPV de Desarrollo Digital (opción "O"): basta con que el contrato tenga uno.
+# CPV de Desarrollo Digital (ajustado el 30/09/2026 tras revisar la web).
 # No existen códigos CPV específicos de IA o chatbots: se clasifican en estos.
-CPV_DIGITAL_PREFIJOS = [
-    "72000000",  # servicios TI: consultoría, desarrollo de software, Internet y apoyo
-    "72200000",  # programación de software y consultoría
-    "7221",      # programación de paquetes de software (incl. 72212000 software de aplicación)
-    "7223",      # desarrollo de software personalizado
-    "72262000",  # desarrollo de software
+# Los que son claramente de PRODUCTO DIGITAL entran siempre:
+CPV_DIGITAL_SIEMPRE = [
     "72413000",  # diseño de sitios web
-    "72416000",  # proveedores de servicios de aplicaciones (SaaS)
     "7242",      # desarrollo de Internet (incl. 72421000 aplicaciones web)
     "79512000",  # centro de atención de llamadas (donde suelen ir los agentes de voz)
+]
+# Los de software GENÉRICO solo entran si lo contrata un organismo turístico o el
+# texto habla de turismo (si no, entraba el software de nóminas de cualquier
+# ayuntamiento, Google Workspace de RTVE, bioinformática...):
+CPV_DIGITAL_CON_CONTEXTO = [
+    "72000000",  # servicios TI genéricos
+    "72200000",  # programación de software y consultoría
+    "7221",      # programación de paquetes de software / software de aplicación
+    "7223",      # desarrollo de software personalizado
+    "72262000",  # desarrollo de software
+    "72416000",  # proveedores de servicios de aplicaciones (SaaS)
 ]
 
 NS_ATOM = {"atom": "http://www.w3.org/2005/Atom"}
@@ -423,15 +430,22 @@ def es_relevante_turismo(titulo: str, organismo: str, cpvs: list[str], objeto: s
     )
 
 
-def es_relevante_digital(titulo: str, cpvs: list[str], objeto: str = "") -> bool:
-    """Opción O: palabra clave (o sigla IA/LLM como palabra completa) o CPV de la lista."""
+def es_relevante_digital(titulo: str, cpvs: list[str], objeto: str = "", organismo: str = "") -> bool:
+    """
+    Palabra clave digital (o IA/LLM como palabra completa), CPV de producto
+    digital, o CPV de software genérico con contexto turístico (organismo
+    turístico o texto que hable de turismo).
+    """
     texto = f"{titulo or ''} {objeto or ''}"
     bajo = texto.lower()
-    return (
-        any(palabra in bajo for palabra in PALABRAS_CLAVE_DIGITAL)
-        or bool(SIGLAS_DIGITAL.search(texto))
-        or _tiene_cpv(cpvs, CPV_DIGITAL_PREFIJOS)
-    )
+    if any(palabra in bajo for palabra in PALABRAS_CLAVE_DIGITAL) or SIGLAS_DIGITAL.search(texto):
+        return True
+    if _tiene_cpv(cpvs, CPV_DIGITAL_SIEMPRE):
+        return True
+    if _tiene_cpv(cpvs, CPV_DIGITAL_CON_CONTEXTO):
+        sin_coches = quitar_turismo_vehiculo(texto).lower()
+        return es_organismo_turistico(organismo) or any(c in sin_coches for c in CONTEXTO_TURISTICO)
+    return False
 
 
 def extraer_organismo(entry):
@@ -521,7 +535,7 @@ def entry_a_registro(entry, fuente: str, capa: str):
             break
 
     es_turismo = es_relevante_turismo(titulo, organismo, cpvs, objeto)
-    es_digital = es_relevante_digital(titulo, cpvs, objeto)
+    es_digital = es_relevante_digital(titulo, cpvs, objeto, organismo)
 
     if not es_turismo and not es_digital:
         return None
