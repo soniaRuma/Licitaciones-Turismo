@@ -670,29 +670,32 @@ def main():
 
     for fuente, cfg in SINDICACIONES.items():
         print(f"Consultando {fuente}...")
-        registros, total_entradas = [], 0
+        total_entradas, total_fuente, conteo = 0, 0, {}
         for etiqueta, entradas in obtener_lotes(cfg["id"], cfg["base"], cfg.get("historico", False)):
             total_entradas += len(entradas)
-            antes = len(registros)
+            registros = []
             for entry in entradas:
                 reg = entry_a_registro(entry, fuente, cfg["capa"])
                 if reg:
                     registros.append(reg)
-            print(f"  [{etiqueta}] {len(entradas)} entradas, {len(registros) - antes} relevantes.")
+            print(f"  [{etiqueta}] {len(entradas)} entradas, {len(registros)} relevantes.")
+            for r in registros:
+                for c in r["categoria"].split(","):
+                    conteo[c] = conteo.get(c, 0) + 1
+                conteo[r["estado"]] = conteo.get(r["estado"], 0) + 1
+            if DEBUG and registros:
+                print("  --- Ejemplo de registro extraído (--debug) ---")
+                print(registros[-1])
+            # (30/09/2026) Se guarda al terminar CADA lote (cada mes en la carga
+            # histórica). Antes se guardaba todo al final y, si GitHub cortaba la
+            # ejecución a mitad, se perdía todo lo procesado. Como los meses van
+            # del más antiguo al más reciente, la versión más nueva de cada
+            # expediente siempre queda la última.
+            guardar_en_supabase(registros, f"{fuente} [{etiqueta}]")
+            total_fuente += len(registros)
 
-        conteo = {}
-        for r in registros:
-            for c in r["categoria"].split(","):
-                conteo[c] = conteo.get(c, 0) + 1
-            conteo[r["estado"]] = conteo.get(r["estado"], 0) + 1
-        print(f"  Total {fuente}: {total_entradas} entradas, {len(registros)} relevantes. Desglose: {conteo}")
-
-        if DEBUG and registros:
-            print("  --- Ejemplo de registro extraído (--debug) ---")
-            print(registros[-1])
-
-        guardar_en_supabase(registros, fuente)
-        total_relevantes += len(registros)
+        print(f"  Total {fuente}: {total_entradas} entradas, {total_fuente} relevantes. Desglose: {conteo}")
+        total_relevantes += total_fuente
 
     cerrar_vencidas()
     print(f"\nHecho. Total de licitaciones relevantes procesadas: {total_relevantes}")
