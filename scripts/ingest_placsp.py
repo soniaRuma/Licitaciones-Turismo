@@ -141,8 +141,8 @@ CPV_TURISMO_CON_CONTEXTO = [
 # turismos"). Estas expresiones se eliminan del texto antes de buscar palabras
 # de turismo, para que un suministro de vehículos no cuente como turístico.
 TURISMO_VEHICULO = re.compile(
-    r"\bturismos\b"
-    r"|\b(veh[ií]culos?|coches?|autom[oó]vil(es)?|tipo|categor[ií]a|clase|modelo|renting|arrendamiento|alquiler"
+    r"\bturismos\b|\bturismes\b"  # plural castellano y catalán: casi siempre coches
+    r"|\b(veh[ií]cles?|veh[ií]culos?|cotxes?|coches?|autom[oó]vil(es)?|tipo|categor[ií]a|clase|modelo|renting|arrendamiento|alquiler"
     r"|adquisici[oó]n|suministro|flota|lote\s*\d*\s*:?)\s+(de\s+)?(tipo\s+)?turismo\b"
     r"|\bturismo\s+(el[eé]ctrico|h[ií]brido|4x4|todoterreno|patrulla|camuflado|berlina|sed[aá]n|compacto"
     r"|segmento|utilitario|gasolina|di[eé]sel|\d+\s+plazas|de\s+\d+\s+plazas|sin\s+distintivo)",
@@ -170,6 +170,9 @@ CPV_PRINCIPAL_EXCLUIDO_TURISMO = [
     "601",   # transporte por carretera (autobuses, etc.)
     "391",   # mobiliario
     "301",   # material y máquinas de oficina
+    "501",   # reparación y mantenimiento de vehículos (ITV, talleres...)
+    "7963",  # formación de personal
+    "80",    # servicios de enseñanza y formación
 ]
 
 # Palabras que dan "contexto turístico" a los CPV anteriores.
