@@ -265,6 +265,12 @@ def descargar_zip(sindicacion_id: str, base: str, yyyymm: str) -> bytes | None:
     if datos:
         seg = (datetime.datetime.now() - inicio).total_seconds()
         print(f"  Fichero {yyyymm}: {len(datos) / 1e6:.1f} MB en {seg:.0f} s")
+        # (01/10/2026) El día 1 de cada mes el fichero del mes nuevo aún no existe
+        # y Hacienda devuelve una respuesta vacía o una página web. Antes eso
+        # paraba todo el script; ahora se avisa y se sigue.
+        if not datos.startswith(b"PK"):
+            print(f"  [aviso] el fichero {yyyymm} no es un zip válido (¿aún no publicado?). Se omite.")
+            return None
     return datos
 
 
@@ -372,7 +378,12 @@ def iterar_ficheros_atom(zip_bytes: bytes):
     (294 MB comprimido) la máquina de GitHub se quedaba sin memoria y se caía
     sin dejar error en el log.
     """
-    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+    try:
+        z = zipfile.ZipFile(io.BytesIO(zip_bytes))
+    except zipfile.BadZipFile as e:
+        print(f"  [aviso] zip no válido, se omite: {e}")
+        return
+    with z:
         nombres = sorted((n for n in z.namelist() if n.endswith(".atom")), key=_orden_fichero_atom)
         for nombre in nombres:
             with z.open(nombre) as f:
@@ -722,17 +733,22 @@ def main():
             guardar_en_supabase(registros, f"{fuente} [{actual}]")
             total_fuente += len(registros)
 
-        for etiqueta, entradas in obtener_lotes(cfg["id"], cfg["base"], cfg.get("historico", False)):
-            if actual is not None and etiqueta != actual:
-                cerrar_mes()
-                registros, entradas_mes = [], 0
-            actual = etiqueta
-            entradas_mes += len(entradas)
-            total_entradas += len(entradas)
-            for entry in entradas:
-                reg = entry_a_registro(entry, fuente, cfg["capa"])
-                if reg:
-                    registros.append(reg)
+        try:
+            for etiqueta, entradas in obtener_lotes(cfg["id"], cfg["base"], cfg.get("historico", False)):
+                if actual is not None and etiqueta != actual:
+                    cerrar_mes()
+                    registros, entradas_mes = [], 0
+                actual = etiqueta
+                entradas_mes += len(entradas)
+                total_entradas += len(entradas)
+                for entry in entradas:
+                    reg = entry_a_registro(entry, fuente, cfg["capa"])
+                    if reg:
+                        registros.append(reg)
+        except Exception as e:
+            # (01/10/2026) Un error inesperado ya no tira todo: se guarda lo que
+            # se llevaba procesado y se sigue con la siguiente fuente.
+            print(f"  [ERROR] {fuente}: {type(e).__name__}: {e}. Se guarda lo procesado hasta aquí.")
         if actual is not None:
             cerrar_mes()
 
