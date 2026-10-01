@@ -327,7 +327,8 @@ def _meses_atras(n: int) -> list[str]:
 def obtener_lotes(sindicacion_id: str, base: str, historico: bool = False):
     """
     Devuelve, uno a uno y en orden cronológico, los lotes de entradas a procesar:
-      - Carga histórica (MESES_HISTORICO > 0 y la fuente lo admite): un lote por mes.
+      - Carga histórica (MESES_HISTORICO > 0 y la fuente lo admite): un lote por
+        cada fichero .atom del zip mensual, etiquetado con su mes (YYYYMM).
       - Día normal: las novedades de los últimos DIAS_NOVEDADES días desde el feed
         en directo; si el feed falla, se recurre (como antes) al fichero del mes.
     """
@@ -336,7 +337,9 @@ def obtener_lotes(sindicacion_id: str, base: str, historico: bool = False):
         for ym in _meses_atras(MESES_HISTORICO):
             datos = descargar_zip(sindicacion_id, base, ym)
             if datos:
-                yield ym, extraer_entradas_atom(datos)
+                for entradas in iterar_ficheros_atom(datos):
+                    yield ym, entradas
+                del datos
         return
 
     try:
@@ -350,7 +353,36 @@ def obtener_lotes(sindicacion_id: str, base: str, historico: bool = False):
     for ym in meses:
         datos = descargar_zip(sindicacion_id, base, ym)
         if datos:
-            yield ym, extraer_entradas_atom(datos)
+            for entradas in iterar_ficheros_atom(datos):
+                yield ym, entradas
+            del datos
+
+
+def _orden_fichero_atom(nombre: str):
+    """Los ficheros del zip con fecha en el nombre van en orden cronológico; el que no la lleva es el más reciente."""
+    m = re.search(r"_(\d{8}_\d{6})", nombre)
+    return (0, m.group(1)) if m else (1, nombre)
+
+
+def iterar_ficheros_atom(zip_bytes: bytes):
+    """
+    (01/10/2026) Recorre los .atom del zip UNO A UNO y devuelve las entradas de
+    cada fichero por separado. Antes se juntaban las de todo el mes en una lista
+    y cada entrada mantenía en memoria su fichero completo: con septiembre
+    (294 MB comprimido) la máquina de GitHub se quedaba sin memoria y se caía
+    sin dejar error en el log.
+    """
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+        nombres = sorted((n for n in z.namelist() if n.endswith(".atom")), key=_orden_fichero_atom)
+        for nombre in nombres:
+            with z.open(nombre) as f:
+                try:
+                    raiz = ET.parse(f).getroot()
+                except ET.ParseError as e:
+                    print(f"  [aviso] error parseando {nombre}: {e}")
+                    continue
+            yield raiz.findall("atom:entry", NS_ATOM)
+            del raiz
 
 
 def extraer_entradas_atom(zip_bytes: bytes):
@@ -671,14 +703,15 @@ def main():
     for fuente, cfg in SINDICACIONES.items():
         print(f"Consultando {fuente}...")
         total_entradas, total_fuente, conteo = 0, 0, {}
-        for etiqueta, entradas in obtener_lotes(cfg["id"], cfg["base"], cfg.get("historico", False)):
-            total_entradas += len(entradas)
-            registros = []
-            for entry in entradas:
-                reg = entry_a_registro(entry, fuente, cfg["capa"])
-                if reg:
-                    registros.append(reg)
-            print(f"  [{etiqueta}] {len(entradas)} entradas, {len(registros)} relevantes.")
+        actual, registros, entradas_mes = None, [], 0
+
+        def cerrar_mes():
+            # Se guarda al terminar CADA mes (o el lote de novedades). Así, si
+            # GitHub corta la ejecución a mitad, lo ya procesado no se pierde.
+            # Los meses van del más antiguo al más reciente, así que la versión
+            # más nueva de cada expediente siempre queda la última.
+            nonlocal total_fuente
+            print(f"  [{actual}] {entradas_mes} entradas, {len(registros)} relevantes.")
             for r in registros:
                 for c in r["categoria"].split(","):
                     conteo[c] = conteo.get(c, 0) + 1
@@ -686,13 +719,22 @@ def main():
             if DEBUG and registros:
                 print("  --- Ejemplo de registro extraído (--debug) ---")
                 print(registros[-1])
-            # (30/09/2026) Se guarda al terminar CADA lote (cada mes en la carga
-            # histórica). Antes se guardaba todo al final y, si GitHub cortaba la
-            # ejecución a mitad, se perdía todo lo procesado. Como los meses van
-            # del más antiguo al más reciente, la versión más nueva de cada
-            # expediente siempre queda la última.
-            guardar_en_supabase(registros, f"{fuente} [{etiqueta}]")
+            guardar_en_supabase(registros, f"{fuente} [{actual}]")
             total_fuente += len(registros)
+
+        for etiqueta, entradas in obtener_lotes(cfg["id"], cfg["base"], cfg.get("historico", False)):
+            if actual is not None and etiqueta != actual:
+                cerrar_mes()
+                registros, entradas_mes = [], 0
+            actual = etiqueta
+            entradas_mes += len(entradas)
+            total_entradas += len(entradas)
+            for entry in entradas:
+                reg = entry_a_registro(entry, fuente, cfg["capa"])
+                if reg:
+                    registros.append(reg)
+        if actual is not None:
+            cerrar_mes()
 
         print(f"  Total {fuente}: {total_entradas} entradas, {total_fuente} relevantes. Desglose: {conteo}")
         total_relevantes += total_fuente
