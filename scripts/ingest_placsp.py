@@ -522,7 +522,8 @@ def extraer_fecha_publicacion(entry):
     por eso licitaciones antiguas aparecían como recién publicadas.
     En CODICE, cada anuncio publicado va en <ValidNoticeInfo> con su tipo
     (<NoticeTypeCode>) y su fecha (<IssueDate>). Preferimos el anuncio de
-    licitación (DOC_CN); si no hay, el anuncio más antiguo; y si tampoco, <updated>.
+    licitación más reciente (DOC_CN); si no hay, el anuncio más antiguo; y si
+    tampoco, <updated>.
     """
     anuncio_licitacion, todos = [], []
     for e in entry.iter():
@@ -542,7 +543,11 @@ def extraer_fecha_publicacion(entry):
         if tipo == "DOC_CN":
             anuncio_licitacion.extend(fechas)
     if anuncio_licitacion:
-        return min(anuncio_licitacion)
+        # El MÁS RECIENTE: si una licitación se anula y se vuelve a publicar
+        # (p.ej. Ayuntamiento de Espera, anulada el 23/09 y republicada el 02/10),
+        # la fecha que interesa es la del anuncio vigente. Las aclaraciones o
+        # documentos posteriores no son anuncios de licitación y no la mueven.
+        return max(anuncio_licitacion)
     if todos:
         return min(todos)
     return parsear_fecha(buscar_texto_por_tag(entry, "updated") or "")
