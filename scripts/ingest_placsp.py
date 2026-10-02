@@ -514,6 +514,40 @@ def extraer_organismo(entry):
     return buscar_texto_por_tag(entry, "RegisteredName") or buscar_texto_por_tag(entry, "name")
 
 
+def extraer_fecha_publicacion(entry):
+    """
+    (02/10/2026) Fecha de publicación REAL del anuncio de licitación.
+    Antes se usaba <updated>, que es la fecha de la ÚLTIMA MODIFICACIÓN del
+    expediente en PLACSP (cada aclaración, documento o cambio de plazo la mueve),
+    por eso licitaciones antiguas aparecían como recién publicadas.
+    En CODICE, cada anuncio publicado va en <ValidNoticeInfo> con su tipo
+    (<NoticeTypeCode>) y su fecha (<IssueDate>). Preferimos el anuncio de
+    licitación (DOC_CN); si no hay, el anuncio más antiguo; y si tampoco, <updated>.
+    """
+    anuncio_licitacion, todos = [], []
+    for e in entry.iter():
+        if e.tag.split("}")[-1] != "ValidNoticeInfo":
+            continue
+        tipo = ""
+        fechas = []
+        for h in e.iter():
+            local = h.tag.split("}")[-1]
+            if local == "NoticeTypeCode" and h.text:
+                tipo = h.text.strip()
+            elif local == "IssueDate" and h.text:
+                f = parsear_fecha(h.text.strip())
+                if f:
+                    fechas.append(f)
+        todos.extend(fechas)
+        if tipo == "DOC_CN":
+            anuncio_licitacion.extend(fechas)
+    if anuncio_licitacion:
+        return min(anuncio_licitacion)
+    if todos:
+        return min(todos)
+    return parsear_fecha(buscar_texto_por_tag(entry, "updated") or "")
+
+
 def extraer_fecha_limite(entry):
     """
     Fecha fin de presentación de ofertas. Antes se cogía la PRIMERA <EndDate> del
@@ -555,7 +589,7 @@ def entry_a_registro(entry, fuente: str, capa: str):
         or buscar_texto_por_tag(entry, "TotalAmount")
         or buscar_texto_por_tag(entry, "TaxExclusiveAmount")
     )
-    fecha_pub = parsear_fecha(buscar_texto_por_tag(entry, "updated") or buscar_texto_por_tag(entry, "IssueDate"))
+    fecha_pub = extraer_fecha_publicacion(entry)
     fecha_limite = extraer_fecha_limite(entry)
     expediente = buscar_texto_por_tag(entry, "ContractFolderID")
 
