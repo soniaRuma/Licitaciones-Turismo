@@ -539,9 +539,14 @@ def extraer_fecha_publicacion(entry):
                 f = parsear_fecha(h.text.strip())
                 if f:
                     fechas.append(f)
-        todos.extend(fechas)
+        if not fechas:
+            continue
+        # Un mismo anuncio puede publicarse en varios medios (perfil, BOE, DOUE)
+        # en días distintos: nos quedamos con la primera publicación.
+        fecha_anuncio = min(fechas)
+        todos.append(fecha_anuncio)
         if tipo == "DOC_CN":
-            anuncio_licitacion.extend(fechas)
+            anuncio_licitacion.append(fecha_anuncio)
     if anuncio_licitacion:
         # El MÁS RECIENTE: si una licitación se anula y se vuelve a publicar
         # (p.ej. Ayuntamiento de Espera, anulada el 23/09 y republicada el 02/10),
@@ -679,8 +684,20 @@ def guardar_en_supabase(registros: list[dict], fuente: str):
     ahora = datetime.datetime.now(datetime.timezone.utc).isoformat()
     unicos = {}
     for r in registros:
-        if r.get("atom_entry_id"):
-            unicos[r["atom_entry_id"]] = {**r, "actualizado_en": ahora}
+        if not r.get("atom_entry_id"):
+            continue
+        nuevo = {**r, "actualizado_en": ahora}
+        previo = unicos.get(r["atom_entry_id"])
+        # (02/10/2026) La fecha de publicación es la de la PRIMERA versión vista
+        # del expediente: las modificaciones posteriores no la mueven. Excepción:
+        # si estaba cerrada (p.ej. anulada) y vuelve a abrirse, es una nueva
+        # convocatoria y se toma la fecha nueva. Supabase aplica la misma regla
+        # entre ejecuciones (trigger "conservar_fecha_publicacion").
+        if (previo and previo.get("fecha_publicacion") and nuevo.get("fecha_publicacion")
+                and nuevo["fecha_publicacion"] > previo["fecha_publicacion"]
+                and not (previo.get("estado") == "cerrada" and nuevo.get("estado") == "abierta")):
+            nuevo["fecha_publicacion"] = previo["fecha_publicacion"]
+        unicos[r["atom_entry_id"]] = nuevo
     registros = list(unicos.values())
 
     endpoint = f"{url}/rest/v1/licitaciones?on_conflict=atom_entry_id"
