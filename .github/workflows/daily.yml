@@ -21,7 +21,7 @@ on:
 
 jobs:
   comprobar_hora:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # versión fija: evita cambios inesperados cuando GitHub mueva "ubuntu-latest" a Ubuntu 26 (19/10/2026)
     outputs:
       ejecutar: ${{ steps.hora.outputs.ejecutar }}
     steps:
@@ -47,7 +47,7 @@ jobs:
   actualizar:
     needs: comprobar_hora
     if: needs.comprobar_hora.outputs.ejecutar == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # versión fija: evita cambios inesperados cuando GitHub mueva "ubuntu-latest" a Ubuntu 26 (19/10/2026)
     # Si algo se queda colgado (p.ej. el servidor de Hacienda no responde),
     # se corta a los 150 minutos en vez de esperar las 6 horas por defecto de GitHub.
     timeout-minutes: 150   # la carga histórica puede tardar; un día normal debería quedarse en pocos minutos
@@ -59,10 +59,10 @@ jobs:
       PYTHONUNBUFFERED: "1"
     steps:
       - name: Descargar el código del repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6        # v6 usa Node.js 24 (Node.js 20 está obsoleto)
 
       - name: Preparar Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6    # v6 usa Node.js 24
         with:
           python-version: "3.11"
 
