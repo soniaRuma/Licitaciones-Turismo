@@ -2,16 +2,20 @@ name: Actualización diaria de licitaciones de Turismo
 
 on:
   schedule:
-    # Objetivo: todos los días a las 15:00 y a las 22:00 hora de España.
+    # Objetivo: todos los días a las 07:00 y a las 15:00 hora de España.
+    # (07/10/2026) PLACSP actualiza sus datos abiertos UNA VEZ AL DÍA, de
+    # madrugada, con lo publicado el día anterior: la de las 07:00 lo recoge
+    # para tenerlo al empezar la jornada, y la de las 15:00 queda como red de
+    # seguridad (por si GitHub falla por la mañana o PLACSP publica más tarde).
     # GitHub Actions solo entiende UTC y España cambia de hora dos veces al año,
     # así que programamos DOS horarios por cada hora deseada y el job
     # "comprobar_hora" deja pasar solo el que toca según la época del año:
-    #   15:00 España = 13:00 UTC en verano (CEST, UTC+2) / 14:00 UTC en invierno (CET, UTC+1)
-    #   22:00 España = 20:00 UTC en verano               / 21:00 UTC en invierno
+    #   07:00 España = 05:00 UTC en verano (CEST, UTC+2) / 06:00 UTC en invierno (CET, UTC+1)
+    #   15:00 España = 13:00 UTC en verano               / 14:00 UTC en invierno
+    - cron: "0 5 * * *"
+    - cron: "0 6 * * *"
     - cron: "0 13 * * *"
     - cron: "0 14 * * *"
-    - cron: "0 20 * * *"
-    - cron: "0 21 * * *"
   workflow_dispatch:      # permite lanzarlo manualmente desde la pestaña "Actions" de GitHub (siempre se ejecuta)
     inputs:
       meses_historico:
@@ -25,7 +29,7 @@ jobs:
     outputs:
       ejecutar: ${{ steps.hora.outputs.ejecutar }}
     steps:
-      - name: Comprobar si toca ejecutar (15:00 o 22:00 en España)
+      - name: Comprobar si toca ejecutar (07:00 o 15:00 en España)
         id: hora
         run: |
           if [ "${{ github.event_name }}" != "schedule" ]; then
@@ -35,12 +39,12 @@ jobs:
           fi
           OFFSET=$(TZ=Europe/Madrid date +%z)   # +0200 en verano, +0100 en invierno
           PROGRAMACION="${{ github.event.schedule }}"
-          if { { [ "$PROGRAMACION" = "0 13 * * *" ] || [ "$PROGRAMACION" = "0 20 * * *" ]; } && [ "$OFFSET" = "+0200" ]; } || \
-             { { [ "$PROGRAMACION" = "0 14 * * *" ] || [ "$PROGRAMACION" = "0 21 * * *" ]; } && [ "$OFFSET" = "+0100" ]; }; then
-            echo "Es una de las horas programadas en España (15:00 o 22:00, offset $OFFSET): se ejecuta."
+          if { { [ "$PROGRAMACION" = "0 13 * * *" ] || [ "$PROGRAMACION" = "0 5 * * *" ]; } && [ "$OFFSET" = "+0200" ]; } || \
+             { { [ "$PROGRAMACION" = "0 14 * * *" ] || [ "$PROGRAMACION" = "0 6 * * *" ]; } && [ "$OFFSET" = "+0100" ]; }; then
+            echo "Es una de las horas programadas en España (07:00 o 15:00, offset $OFFSET): se ejecuta."
             echo "ejecutar=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Esta programación ($PROGRAMACION) no corresponde a las 15:00 ni a las 22:00 españolas con offset $OFFSET: se omite."
+            echo "Esta programación ($PROGRAMACION) no corresponde a las 07:00 ni a las 15:00 españolas con offset $OFFSET: se omite."
             echo "ejecutar=false" >> "$GITHUB_OUTPUT"
           fi
 
