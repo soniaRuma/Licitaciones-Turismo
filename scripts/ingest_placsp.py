@@ -206,6 +206,14 @@ PALABRAS_CLAVE_DIGITAL = [
 # "material", "farmacia" o "Galicia").
 SIGLAS_DIGITAL = re.compile(r"\b(ia|llm|llms)\b", re.IGNORECASE)
 
+# (16/10/2026) "web" o "webs" como palabra completa: cualquier contrato sobre una
+# web cuenta como Digital ("web municipal", "web corporativa", "webs turísticas"...).
+# Antes solo se reconocían expresiones concretas ("página web", "portal web"...)
+# y se escapó, p.ej., "gestión y mejora continua de la web municipal" (Donostia).
+# Se excluyen usos que no son de producto web ("servicio web" de un sistema, etc.).
+WEB_PALABRA = re.compile(r"\bwebs?\b", re.IGNORECASE)
+WEB_EXCLUIR = re.compile(r"\b(servicios? web|web services?|webservices?|cámaras? web|webcams?)\b", re.IGNORECASE)
+
 # CPV de Desarrollo Digital (ajustado el 30/09/2026 tras revisar la web).
 # No existen códigos CPV específicos de IA o chatbots: se clasifican en estos.
 # Los que son claramente de PRODUCTO DIGITAL entran siempre:
@@ -482,6 +490,8 @@ def es_relevante_digital(titulo: str, cpvs: list[str], objeto: str = "", organis
     texto = f"{titulo or ''} {objeto or ''}"
     bajo = texto.lower()
     if any(palabra in bajo for palabra in PALABRAS_CLAVE_DIGITAL) or SIGLAS_DIGITAL.search(texto):
+        return True
+    if WEB_PALABRA.search(WEB_EXCLUIR.sub(" ", texto)):
         return True
     if _tiene_cpv(cpvs, CPV_DIGITAL_SIEMPRE):
         return True
